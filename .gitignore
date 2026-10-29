@@ -36,6 +36,16 @@ yarn-error.log*
 # vercel
 .vercel
 
+# clerk cli claim/link state
+.clerk/
+
+# project notes
+/PROJECT.md
+/Memory.md
+
+# local agent settings
+.claude/settings.local.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
