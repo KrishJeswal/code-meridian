@@ -4,7 +4,7 @@ A local app that reads a public GitHub repo and draws it as a dependency map.
 Everything on screen comes from really parsing the code. The AI explains what
 the parser found, it never decides what's there.
 
-Why any of these rules exist is in `PROJECT.md`. This file is the
+Why any of these rules exist is in `Project.md`. This file is the
 rules themselves.
 
 ## Stack
@@ -21,7 +21,7 @@ inside the installed package rather than going from memory.
 
 Spec driven. Nothing gets built without a spec.
 
-- `PROJECT.md` — what this app is and every decision behind it. Read
+- `Project.md` — what this app is and every decision behind it. Read
   the part you need. Don't ask me to paste it. gitignored
 - `docs/specs/phase-NN.md` — one per phase, written just before it starts.
   Behaviour and an acceptance check, never filenames.

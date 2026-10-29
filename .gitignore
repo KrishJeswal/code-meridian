@@ -40,7 +40,7 @@ yarn-error.log*
 .clerk/
 
 # project notes
-/PROJECT.md
+/Project.md
 /Memory.md
 
 # local agent settings
