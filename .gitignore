@@ -1,14 +1,5 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
 
 # testing
 /coverage
@@ -20,32 +11,49 @@
 # production
 /build
 
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# clerk cli claim/link state
-.clerk/
-
-# project notes
-/Project.md
-/Memory.md
-
-# local agent settings
-.claude/settings.local.json
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# env files
+.env*
+
+# deploy / auth CLI state
+.vercel
+.clerk/
+
+# debug
+*.log
+
+# os
+.DS_Store
+Thumbs.db
+desktop.ini
+*.pem
+
+# editors
+.vscode/
+.idea/
+
+# project notes and specs
+/Project.md
+/Memory.md
+/docs/
+
+# AI tooling: agent instructions, skills, MCP config
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.claude/
+.agents/
+skills-lock.json
+.mcp.json
+.cursor/
+.cursorrules
+.windsurf/
+.windsurfrules
+.gemini/
+.codex/
+.continue/
+.aider*
+.github/copilot-instructions.md
