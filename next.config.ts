@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
+import { assertEnv } from "./lib/env";
+
+assertEnv();
 
 const nextConfig: NextConfig = {
-  /* config options here */
   experimental: {
     agentFeedback: true,
   },

@@ -1,4 +1,4 @@
-# Cartograph
+# Code Meridian
 
 A local app that reads a public GitHub repo and draws it as a dependency map.
 Everything on screen comes from really parsing the code. The AI explains what
