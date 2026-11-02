@@ -14,7 +14,11 @@ const values = {
     process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL,
 };
 
-const serverOnly = ["CLERK_SECRET_KEY"] as const;
+const serverOnly = [
+  "CLERK_SECRET_KEY",
+  "CLERK_WEBHOOK_SIGNING_SECRET",
+  "SUPABASE_SECRET_KEY",
+] as const;
 
 // Called from next.config.ts, which runs before dev, build and start, so a
 // missing value stops the process on boot instead of surfacing as a Clerk or
@@ -40,4 +44,10 @@ export function supabaseEnv(): { url: string; publishableKey: string } {
     throw new Error("Supabase environment variables are missing");
   }
   return { url, publishableKey };
+}
+
+export function supabaseSecretKey(): string {
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!key?.trim()) throw new Error("SUPABASE_SECRET_KEY is missing");
+  return key;
 }

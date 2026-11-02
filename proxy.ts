@@ -1,6 +1,11 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-const isPublic = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+const isPublic = createRouteMatcher([
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  // Called by Clerk, not a browser; authenticated by its Svix signature.
+  "/api/webhooks/clerk",
+]);
 
 // Protection happens here rather than in pages so a signed-out request is
 // redirected before any rendering starts and no page HTML is sent.
