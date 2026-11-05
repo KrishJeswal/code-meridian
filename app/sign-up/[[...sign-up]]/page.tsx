@@ -1,12 +1,13 @@
 import { SignUp } from "@clerk/nextjs";
 import { Suspense } from "react";
+import { AuthFrame } from "@/components/auth-frame";
 
 export default function SignUpPage() {
   return (
-    <div className="flex flex-1 items-center justify-center bg-surface">
+    <AuthFrame>
       <Suspense>
         <SignUp />
       </Suspense>
-    </div>
+    </AuthFrame>
   );
 }

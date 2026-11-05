@@ -5,16 +5,22 @@
  * control writes data-theme to <html>; "system" leaves both schemes allowed so
  * the OS decides, the other two pin one. One definition per token, so the
  * dark palette can't drift out of sync with a duplicated media-query block.
+ *
+ * Surfaces are three greys ordered by depth (sunken < base < raised) so
+ * structure reads without colour; colour is reserved for meaning.
  */
 :root {
   color-scheme: light dark;
 
-  --surface: light-dark(#fafafa, #0c0c0d);
-  --surface-raised: light-dark(#ffffff, #141416);
-  --border: light-dark(#e4e4e7, #26262b);
-  --text: light-dark(#18181b, #e4e4e7);
-  --text-muted: light-dark(#71717a, #8b8b94);
-  --accent: light-dark(#2563eb, #4d8bff);
+  --surface-sunken: light-dark(#f0f0f2, #08090a);
+  --surface: light-dark(#f7f7f8, #0e0f11);
+  --surface-raised: light-dark(#ffffff, #16171a);
+  --border: light-dark(#e3e3e7, #24252a);
+  --border-strong: light-dark(#cdcdd3, #34353c);
+  --text: light-dark(#1a1b1f, #e6e6ea);
+  --text-muted: light-dark(#6b6c75, #8e8f99);
+  --text-faint: light-dark(#9a9ba3, #5f6069);
+  --accent: light-dark(#2160e0, #5b93ff);
   --accent-contrast: #ffffff;
 }
 
@@ -27,19 +33,32 @@
 }
 
 @theme inline {
+  --color-surface-sunken: var(--surface-sunken);
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
   --color-accent: var(--accent);
   --color-accent-contrast: var(--accent-contrast);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
 body {
   background: var(--surface);
   color: var(--text);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+  font-feature-settings: "tnum" 1;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

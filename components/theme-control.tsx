@@ -35,7 +35,7 @@ export function ThemeControl() {
     <div
       role="group"
       aria-label="Theme"
-      className="flex h-6 items-center rounded border border-border text-[11px]"
+      className="flex h-6 items-center gap-px rounded-[5px] border border-border bg-surface-sunken p-px text-[11px]"
     >
       {THEMES.map((t) => (
         <button
@@ -43,7 +43,7 @@ export function ThemeControl() {
           type="button"
           aria-pressed={current === t}
           onClick={() => setTheme(t)}
-          className="h-full px-2 text-text-muted first:rounded-l last:rounded-r hover:text-text aria-pressed:bg-accent aria-pressed:text-accent-contrast"
+          className="h-full rounded-[4px] px-2 text-text-muted hover:text-text aria-pressed:bg-surface-raised aria-pressed:font-medium aria-pressed:text-accent aria-pressed:shadow-[0_0_0_1px_var(--border)]"
         >
           {t}
         </button>
