@@ -8,11 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "parse": "tsx parser/cli.ts",
-    "test": "tsx --test \"parser/**/*.test.ts\""
+    "test": "tsx --test \"parser/**/*.test.ts\" \"lib/**/*.test.ts\""
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.22",
+    "@dagrejs/dagre": "^3.1.3",
     "@supabase/supabase-js": "^2.118.0",
+    "@xyflow/react": "^12.12.1",
     "next": "16.4.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",

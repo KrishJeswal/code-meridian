@@ -22,6 +22,10 @@
   --text-faint: light-dark(#9a9ba3, #5f6069);
   --accent: light-dark(#2160e0, #5b93ff);
   --accent-contrast: #ffffff;
+
+  /* Direction relative to a selection: what flows into it, what it uses. */
+  --incoming: light-dark(#15803d, #4ade80);
+  --outgoing: light-dark(#b45309, #fbbf24);
 }
 
 :root[data-theme="light"] {
@@ -43,6 +47,8 @@
   --color-text-faint: var(--text-faint);
   --color-accent: var(--accent);
   --color-accent-contrast: var(--accent-contrast);
+  --color-incoming: var(--incoming);
+  --color-outgoing: var(--outgoing);
   --font-sans: var(--font-plex-sans);
   --font-mono: var(--font-plex-mono);
 }
