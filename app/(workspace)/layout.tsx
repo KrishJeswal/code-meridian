@@ -1,6 +1,5 @@
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { Wordmark } from "@/components/meridian-mark";
-import { ThemeControl } from "@/components/theme-control";
 
 export default function WorkspaceLayout({ children }: LayoutProps<"/">) {
   return (
@@ -15,7 +14,6 @@ export default function WorkspaceLayout({ children }: LayoutProps<"/">) {
           afterLeaveOrganizationUrl="/"
         />
         <div className="ml-auto flex items-center gap-3">
-          <ThemeControl />
           <UserButton />
         </div>
       </header>

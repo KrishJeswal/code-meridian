@@ -1,6 +1,6 @@
 import dagre from "@dagrejs/dagre";
 import { stronglyConnected } from "./scc";
-import type { View, ViewNode } from "./view";
+import { MAX_ROWS, type View, type ViewNode } from "./view";
 
 // Labels are monospace, so width is arithmetic rather than a DOM
 // measurement, which keeps layout pure and identical on every run.
@@ -26,9 +26,11 @@ export function sizeOf(node: ViewNode): { width: number; height: number } {
   if (!node.open) {
     return { width: textWidth(node.label) + 2 * PAD_X, height: heightFor(node.folder.fanIn) };
   }
-  const rowsWidth = Math.max(0, ...node.rows.map((r) => textWidth(r.label))) + FAN_COLUMNS;
+  // From every row in the folder, not just the visible window, so scrolling
+  // a panel never changes its size and never moves the layout.
+  const rowsWidth = Math.max(0, ...node.allRows.map((r) => textWidth(r.label))) + FAN_COLUMNS;
   const headerWidth = Math.max(textWidth(node.label), textWidth(`${node.folder.files.length} files  in 000  out 000`));
-  const rowCount = node.rows.length + (node.hidden > 0 ? 1 : 0);
+  const rowCount = node.scrolls ? MAX_ROWS : node.rows.length;
   return {
     width: Math.max(rowsWidth, headerWidth) + 2 * PAD_X,
     height: HEADER_HEIGHT + rowCount * ROW_HEIGHT + 4,

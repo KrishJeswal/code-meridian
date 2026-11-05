@@ -6,7 +6,8 @@ import { fold, foldAt } from "./fold";
 import { shortestUniqueLabels } from "./labels";
 import { layout } from "./layout";
 import { stronglyConnected } from "./scc";
-import { buildModel, buildView, focusOf } from "./view";
+import { fileDetail, folderDetail, repoSummary } from "./summary";
+import { ABOVE, BELOW, WINDOW, buildModel, buildView, clampOffset, focusOf, offsetToShow } from "./view";
 
 const files = (paths: string[]) =>
   paths.map((p) => ({ path: p, module: p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "." }));
@@ -71,11 +72,20 @@ describe("the checked-in fixture", () => {
     assert.equal(new Set(all).size, r.files.length);
   });
 
-  test("every edge ends on a node that exists, folded or open", () => {
-    const biggest = [...model.folders].sort((a, b) => b.files.length - a.files.length)[0].dir;
-    for (const v of [closed, buildView(model, new Set([biggest]))]) {
+  const biggest = [...model.folders].sort((a, b) => b.files.length - a.files.length)[0];
+
+  test("every edge ends on a handle that exists, folded, open or scrolled", () => {
+    const views = [
+      closed,
+      buildView(model, new Set([biggest.dir])),
+      buildView(model, new Set([biggest.dir]), new Map([[biggest.dir, 17]])),
+      buildView(model, new Set([biggest.dir]), new Map([[biggest.dir, 999]])),
+    ];
+    for (const v of views) {
       const ids = new Set(v.nodes.map((n) => n.id));
-      const handles = new Set(v.nodes.flatMap((n) => (n.open ? [...n.rows.map((x) => x.path), "more"] : [n.id])));
+      const handles = new Set(
+        v.nodes.flatMap((n) => (n.open ? [...n.rows.map((x) => x.path), ...(n.scrolls ? [ABOVE, BELOW] : [])] : [n.id])),
+      );
       for (const e of v.edges) {
         assert.ok(ids.has(e.source) && ids.has(e.target), e.id);
         assert.ok(handles.has(e.sourceHandle.slice(2)) && handles.has(e.targetHandle.slice(2)), e.id);
@@ -83,12 +93,57 @@ describe("the checked-in fixture", () => {
     }
   });
 
-  test("an open panel caps its rows and counts the rest", () => {
-    const biggest = [...model.folders].sort((a, b) => b.files.length - a.files.length)[0];
-    const panel = buildView(model, new Set([biggest.dir])).nodes.find((n) => n.id === biggest.dir);
-    assert.ok(panel);
-    assert.equal(panel.rows.length + panel.hidden, biggest.files.length);
-    assert.ok(panel.rows.length <= 12);
+  test("a long panel shows a window and counts what's above and below", () => {
+    for (const offset of [0, 17, 999]) {
+      const panel = buildView(model, new Set([biggest.dir]), new Map([[biggest.dir, offset]])).nodes.find(
+        (n) => n.id === biggest.dir,
+      );
+      assert.ok(panel?.scrolls);
+      assert.equal(panel.rows.length, WINDOW);
+      assert.equal(panel.above + panel.rows.length + panel.below, biggest.files.length);
+      assert.equal(panel.offset, clampOffset(offset, biggest.files.length));
+    }
+  });
+
+  test("scrolling a panel never moves the layout", () => {
+    const at = (offset: number) =>
+      [...layout(buildView(model, new Set([biggest.dir]), new Map([[biggest.dir, offset]])))];
+    assert.deepEqual(at(0), at(23));
+  });
+
+  test("offsetToShow brings any file of a long folder into the window", () => {
+    for (const p of biggest.files) {
+      const panel = buildView(model, new Set([biggest.dir]), new Map([[biggest.dir, offsetToShow(model, p)]])).nodes.find(
+        (n) => n.id === biggest.dir,
+      );
+      assert.ok(panel?.rows.some((row) => row.path === p), p);
+    }
+  });
+
+  test("a file's import and dependent counts equal its lists and its fans", () => {
+    for (const f of r.files) {
+      const d = fileDetail(model, f.path);
+      assert.ok(d);
+      assert.equal(d.imports.length, f.fanOut, f.path);
+      assert.equal(d.importedBy.length, f.fanIn, f.path);
+    }
+  });
+
+  test("the repository summary ranks and counts honestly", () => {
+    const s = repoSummary(r.files);
+    assert.ok(s.mostImported.length <= 10);
+    assert.equal(s.importedCount, r.files.filter((f) => f.fanIn > 0).length);
+    assert.equal(s.unimportedCount, r.files.filter((f) => f.parsed && f.fanIn === 0).length);
+    for (let i = 1; i < s.mostImported.length; i++) assert.ok(s.mostImported[i - 1].count >= s.mostImported[i].count);
+    for (const u of s.unimported) assert.equal(r.files.find((f) => f.path === u.path)?.fanIn, 0);
+    assert.equal(s.unclassified, r.files.filter((f) => f.role === null).length);
+  });
+
+  test("a folder's kinds add up to its files", () => {
+    for (const folder of model.folders) {
+      const d = folderDetail(model, folder.dir);
+      assert.equal(d?.kinds.reduce((n, k) => n + k.count, 0), folder.files.length);
+    }
   });
 
   test("layout is deterministic", () => {

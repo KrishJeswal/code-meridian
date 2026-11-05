@@ -11,9 +11,9 @@ import {
   type NodeTypes,
   type Viewport,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { layout, type Placed } from "@/lib/map/layout";
-import { buildModel, buildView, focusOf, type MapEdge, type MapFile, type Selection } from "@/lib/map/view";
+import { focusOf, keyOf, nodeActive, viewWindows, type Hover, type MapModel, type Selection, type View } from "@/lib/map/view";
 import { FolderNode, PanelNode, type FolderFlowNode, type PanelFlowNode } from "./nodes";
 
 const nodeTypes: NodeTypes = { folder: FolderNode, panel: PanelNode };
@@ -22,6 +22,12 @@ const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
 const PADDING = 0.06;
 const INITIAL_MAX_ZOOM = 1;
+
+// Bottom to top. Plain edges always sit under every node.
+const Z_EDGE = 0;
+const Z_DIMMED_NODE = 1;
+const Z_HIGHLIGHTED_EDGE = 2;
+const Z_NODE = 3;
 
 function boundsOf(placed: ReadonlyMap<string, Placed>) {
   let minX = Infinity;
@@ -52,57 +58,47 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function MapCanvas({ files, edges }: { files: MapFile[]; edges: MapEdge[] }) {
-  const model = useMemo(() => buildModel(files, edges), [files, edges]);
-  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
-  const [selection, setSelection] = useState<Selection>(null);
-  const view = useMemo(() => buildView(model, open), [model, open]);
-  const placed = useMemo(() => layout(view), [view]);
+export interface CanvasProps {
+  model: MapModel;
+  view: View;
+  layoutView: View;
+  open: ReadonlySet<string>;
+  selection: Selection;
+  hover: Hover;
+  onOpen: (dir: string) => void;
+  onClose: (dir: string) => void;
+  onSelectFile: (path: string) => void;
+  onClearSelection: () => void;
+  onHover: (hover: Hover) => void;
+  onScroll: (dir: string, offset: number) => void;
+}
+
+function MapCanvas(props: CanvasProps) {
+  const { model, view, layoutView, open, selection, hover, onOpen, onClose, onSelectFile, onClearSelection, onHover, onScroll } = props;
+  const placed = useMemo(() => layout(layoutView), [layoutView]);
   const focus = useMemo(() => focusOf(model, view, selection), [model, view, selection]);
+  const windows = useMemo(() => viewWindows(model, view), [model, view]);
+  const hoverKey = hover === null ? null : hover.kind === "folder" ? hover.dir : keyOf(model, windows, hover.path);
 
   const rf = useReactFlow();
   const width = useStore((s) => s.width);
   const height = useStore((s) => s.height);
-  const change = useRef<"open" | "close" | null>(null);
   // True until the user pans or zooms. While true, the view follows the
   // layout; after that, the view is theirs and only an open may change it.
   const autoFramed = useRef(true);
   const lastSize = useRef<{ width: number; height: number } | null>(null);
+  const lastOpen = useRef(open);
   const gestureStart = useRef<Viewport | null>(null);
 
-  const onOpen = useCallback((dir: string) => {
-    change.current = "open";
-    setOpen((prev) => new Set(prev).add(dir));
-    setSelection({ kind: "folder", dir });
-  }, []);
-
-  const onClose = useCallback(
-    (dir: string) => {
-      change.current = "close";
-      setOpen((prev) => {
-        const next = new Set(prev);
-        next.delete(dir);
-        return next;
-      });
-      setSelection((s) => {
-        if (s?.kind === "folder" && s.dir === dir) return null;
-        if (s?.kind === "file" && model.folderOf.get(s.path) === dir) return null;
-        return s;
-      });
-    },
-    [model],
-  );
-
-  const onSelectFile = useCallback((path: string) => setSelection({ kind: "file", path }), []);
-
   // Runs against the layout after the change has been applied, never the one
-  // before it. Framing uses the same bounds, padding and zoom cap as the
-  // initial fitView, so opening then closing a folder lands on exactly the
-  // starting view instead of wherever the open's recentring left it.
+  // before it. Whether a folder opened or closed is read off the open set
+  // itself, so an open from the pane is treated exactly like one from a
+  // click. Framing uses the same bounds, padding and zoom cap as the initial
+  // fitView, so opening then closing a folder lands on the starting view.
   useEffect(() => {
     if (width === 0 || height === 0) return;
-    const kind = change.current;
-    change.current = null;
+    const kind = open.size > lastOpen.current.size ? "open" : open.size < lastOpen.current.size ? "close" : null;
+    lastOpen.current = open;
     const first = lastSize.current === null;
     const resized = !first && (lastSize.current?.width !== width || lastSize.current?.height !== height);
     lastSize.current = { width, height };
@@ -122,7 +118,7 @@ function MapCanvas({ files, edges }: { files: MapFile[]; edges: MapEdge[] }) {
     }
     const next = getViewportForBounds(bounds, width, height, MIN_ZOOM, ceiling, PADDING);
     void rf.setViewport(next, { duration: kind && !prefersReducedMotion() ? 200 : 0 });
-  }, [placed, rf, width, height]);
+  }, [placed, open, rf, width, height]);
 
   const nodes = useMemo(
     () =>
@@ -138,10 +134,15 @@ function MapCanvas({ files, edges }: { files: MapFile[]; edges: MapEdge[] }) {
           draggable: false,
           selectable: false,
           focusable: false,
-          data: { node: n, focus, selection, onOpen, onClose, onSelectFile },
+          // Layering by relevance: dimmed nodes under highlighted edges, so a
+          // coloured edge crossing an unrelated folder isn't darkened by its
+          // translucent box; active nodes above them, so edges still run
+          // under the rows they connect to.
+          zIndex: focus && !nodeActive(focus, n) ? Z_DIMMED_NODE : Z_NODE,
+          data: { node: n, focus, selection, hoverKey, onOpen, onClose, onSelectFile, onHover, onScroll },
         };
       }),
-    [view, placed, focus, selection, onOpen, onClose, onSelectFile],
+    [view, placed, focus, selection, hoverKey, onOpen, onClose, onSelectFile, onHover, onScroll],
   );
 
   const flowEdges = useMemo(
@@ -157,6 +158,7 @@ function MapCanvas({ files, edges }: { files: MapFile[]; edges: MapEdge[] }) {
           targetHandle: e.targetHandle,
           selectable: false,
           focusable: false,
+          zIndex: dir ? Z_HIGHLIGHTED_EDGE : Z_EDGE,
           style: { stroke, strokeWidth: dir ? 1.5 : 1, opacity: focus && !dir ? 0.12 : 1 },
         };
       }),
@@ -189,15 +191,21 @@ function MapCanvas({ files, edges }: { files: MapFile[]; edges: MapEdge[] }) {
           autoFramed.current = false;
         }
       }}
-      onPaneClick={() => setSelection(null)}
+      onPaneClick={onClearSelection}
       onNodeClick={(_, node) => {
         if (node.type === "folder") onOpen(node.id);
+      }}
+      onNodeMouseEnter={(_, node) => {
+        if (node.type === "folder") onHover({ kind: "folder", dir: node.id });
+      }}
+      onNodeMouseLeave={(_, node) => {
+        if (node.type === "folder") onHover(null);
       }}
     />
   );
 }
 
-export function Canvas(props: { files: MapFile[]; edges: MapEdge[] }) {
+export function Canvas(props: CanvasProps) {
   return (
     <div className="relative min-w-0 bg-surface">
       <ReactFlowProvider>

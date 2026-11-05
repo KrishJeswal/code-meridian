@@ -1,39 +1,26 @@
 @import "tailwindcss";
 
 /*
- * Tokens resolve through light-dark(), which follows color-scheme. The theme
- * control writes data-theme to <html>; "system" leaves both schemes allowed so
- * the OS decides, the other two pin one. One definition per token, so the
- * dark palette can't drift out of sync with a duplicated media-query block.
- *
- * Surfaces are three greys ordered by depth (sunken < base < raised) so
- * structure reads without colour; colour is reserved for meaning.
+ * Dark only. Surfaces are three greys ordered by depth (sunken < base <
+ * raised) so structure reads without colour; colour is reserved for meaning.
  */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  --surface-sunken: light-dark(#f0f0f2, #08090a);
-  --surface: light-dark(#f7f7f8, #0e0f11);
-  --surface-raised: light-dark(#ffffff, #16171a);
-  --border: light-dark(#e3e3e7, #24252a);
-  --border-strong: light-dark(#cdcdd3, #34353c);
-  --text: light-dark(#1a1b1f, #e6e6ea);
-  --text-muted: light-dark(#6b6c75, #8e8f99);
-  --text-faint: light-dark(#9a9ba3, #5f6069);
-  --accent: light-dark(#2160e0, #5b93ff);
+  --surface-sunken: #08090a;
+  --surface: #0e0f11;
+  --surface-raised: #16171a;
+  --border: #24252a;
+  --border-strong: #34353c;
+  --text: #e6e6ea;
+  --text-muted: #8e8f99;
+  --text-faint: #5f6069;
+  --accent: #5b93ff;
   --accent-contrast: #ffffff;
 
   /* Direction relative to a selection: what flows into it, what it uses. */
-  --incoming: light-dark(#15803d, #4ade80);
-  --outgoing: light-dark(#b45309, #fbbf24);
-}
-
-:root[data-theme="light"] {
-  color-scheme: light;
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
+  --incoming: #4ade80;
+  --outgoing: #fbbf24;
 }
 
 @theme inline {
@@ -67,4 +54,14 @@ body {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/*
+ * Opt-out for an element whose own selection highlight already shows where
+ * the keyboard is (the panel's file list). A Tailwind outline-none can't do
+ * this: the rule above is unlayered, and unlayered rules beat every
+ * utility layer.
+ */
+[data-focus-ring="off"]:focus-visible {
+  outline: none;
 }

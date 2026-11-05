@@ -2,18 +2,22 @@ import { fold } from "./fold";
 import { shortestUniqueLabels } from "./labels";
 
 // Derived from the parser's output, never a reshaping of it: these are the
-// fields the map reads, picked off ParseResult.files and ParseResult.edges.
+// fields the map and pane read, picked off ParseResult.files and .edges.
 export interface MapFile {
   path: string;
   module: string;
   fanIn: number;
   fanOut: number;
   role: string | null;
+  lines: number | null;
+  parsed: boolean;
+  skipReason: string | null;
 }
 
 export interface MapEdge {
   source: string;
   target: string;
+  typeOnly: boolean;
 }
 
 export interface FolderSummary {
@@ -32,8 +36,13 @@ export interface MapModel {
   edges: MapEdge[];
 }
 
+// A panel never grows past MAX_ROWS rows. Past that it shows a window of
+// WINDOW file rows between an "above" and a "below" row, so its size is the
+// same wherever it is scrolled to.
 export const MAX_ROWS = 12;
-export const MORE = "more";
+export const WINDOW = MAX_ROWS - 2;
+export const ABOVE = "above";
+export const BELOW = "below";
 
 export function buildModel(files: readonly MapFile[], edges: readonly MapEdge[]): MapModel {
   const f = fold(files);
@@ -79,8 +88,15 @@ export interface ViewNode {
   label: string;
   folder: FolderSummary;
   open: boolean;
+  // Every file in the panel, in order. All of them are in the DOM so the
+  // list can scroll natively; `rows` is the subset that counts as on screen
+  // (and that edges may attach to), from the first row at `offset`.
+  allRows: Row[];
   rows: Row[];
-  hidden: number;
+  scrolls: boolean;
+  offset: number;
+  above: number;
+  below: number;
 }
 
 export interface ViewEdge {
@@ -98,62 +114,104 @@ export interface View {
   edges: ViewEdge[];
 }
 
-// Most-depended-on files first, so the rows that fit are the ones that matter
+// Most-depended-on files first, so the top of a panel is what matters most
 // to the map; ties fall back to path for a stable order.
-function orderRows(paths: readonly string[], files: Map<string, MapFile>): string[] {
+export function orderRows(paths: readonly string[], files: Map<string, MapFile>): string[] {
   return [...paths].sort((a, b) => {
     const d = (files.get(b)?.fanIn ?? 0) - (files.get(a)?.fanIn ?? 0);
     return d !== 0 ? d : a < b ? -1 : a > b ? 1 : 0;
   });
 }
 
-export function visibleRows(folder: FolderSummary, files: Map<string, MapFile>): { shown: string[]; hidden: number } {
+export function clampOffset(offset: number, total: number): number {
+  return total <= MAX_ROWS ? 0 : Math.max(0, Math.min(offset, total - WINDOW));
+}
+
+// The offset that brings `path` into its panel's window, roughly centred.
+export function offsetToShow(model: MapModel, path: string): number {
+  const dir = model.folderOf.get(path);
+  const folder = model.folders.find((f) => f.dir === dir);
+  if (!folder) return 0;
+  const index = orderRows(folder.files, model.files).indexOf(path);
+  return clampOffset(index - Math.floor(WINDOW / 2), folder.files.length);
+}
+
+interface Window {
+  ordered: string[];
+  shown: Set<string>;
+  offset: number;
+}
+
+function windowOf(folder: FolderSummary, files: Map<string, MapFile>, offset: number): Window {
   const ordered = orderRows(folder.files, files);
-  if (ordered.length <= MAX_ROWS) return { shown: ordered, hidden: 0 };
-  const shown = ordered.slice(0, MAX_ROWS - 1);
-  return { shown, hidden: ordered.length - shown.length };
+  if (ordered.length <= MAX_ROWS) return { ordered, shown: new Set(ordered), offset: 0 };
+  const o = clampOffset(offset, ordered.length);
+  return { ordered, shown: new Set(ordered.slice(o, o + WINDOW)), offset: o };
 }
 
 // Where a file attaches on screen: the folded node itself, its row in an
-// open panel, or the panel's "more" row when it didn't fit.
-export function endpointOf(
-  path: string,
-  model: MapModel,
-  open: ReadonlySet<string>,
-  shownRows: ReadonlyMap<string, ReadonlySet<string>>,
-): { node: string; handle: string } {
+// open panel, or the panel's "above"/"below" row when scrolled out of view.
+function endpoint(path: string, model: MapModel, windows: ReadonlyMap<string, Window>): { node: string; handle: string } {
   const dir = model.folderOf.get(path);
   if (dir === undefined) throw new Error(`${path} has no folder`);
-  if (!open.has(dir)) return { node: dir, handle: dir };
-  return { node: dir, handle: shownRows.get(dir)?.has(path) ? path : MORE };
+  const w = windows.get(dir);
+  if (!w) return { node: dir, handle: dir };
+  if (w.shown.has(path)) return { node: dir, handle: path };
+  return { node: dir, handle: w.ordered.indexOf(path) < w.offset ? ABOVE : BELOW };
 }
 
-export function buildView(model: MapModel, open: ReadonlySet<string>): View {
-  const shownRows = new Map<string, Set<string>>();
-  const nodes: ViewNode[] = model.folders.map((folder) => {
-    if (!open.has(folder.dir)) return { id: folder.dir, label: "", folder, open: false, rows: [], hidden: 0 };
-    const { shown, hidden } = visibleRows(folder, model.files);
-    shownRows.set(folder.dir, new Set(shown));
-    const rows = shown.map((p) => {
-      const file = model.files.get(p);
-      return { path: p, label: "", fanIn: file?.fanIn ?? 0, fanOut: file?.fanOut ?? 0 };
-    });
-    return { id: folder.dir, label: "", folder, open: true, rows, hidden };
-  });
+export function handleKey(node: string, handle: string): string {
+  return handle === ABOVE || handle === BELOW ? `${node}#${handle}` : handle;
+}
 
-  const labels = shortestUniqueLabels([
-    ...nodes.map((n) => n.id),
-    ...nodes.flatMap((n) => n.rows.map((r) => r.path)),
-  ]);
-  for (const n of nodes) {
-    n.label = n.id === "." ? "./" : (labels.get(n.id) ?? n.id);
-    for (const r of n.rows) r.label = labels.get(r.path) ?? r.path;
+export function buildView(
+  model: MapModel,
+  open: ReadonlySet<string>,
+  offsets: ReadonlyMap<string, number> = new Map(),
+): View {
+  const windows = new Map<string, Window>();
+  for (const folder of model.folders) {
+    if (open.has(folder.dir)) windows.set(folder.dir, windowOf(folder, model.files, offsets.get(folder.dir) ?? 0));
   }
+
+  // Labels cover every file in an open panel, shown or not, so scrolling
+  // never changes a label and therefore never changes the layout.
+  const labels = shortestUniqueLabels([
+    ...model.folders.map((f) => f.dir),
+    ...[...windows.values()].flatMap((w) => w.ordered),
+  ]);
+  const labelOf = (p: string): string => labels.get(p) ?? p;
+
+  const nodes: ViewNode[] = model.folders.map((folder) => {
+    const label = folder.dir === "." ? "./" : labelOf(folder.dir);
+    const w = windows.get(folder.dir);
+    if (!w) {
+      return { id: folder.dir, label, folder, open: false, allRows: [], rows: [], scrolls: false, offset: 0, above: 0, below: 0 };
+    }
+    const allRows = w.ordered.map((p) => {
+      const file = model.files.get(p);
+      return { path: p, label: labelOf(p), fanIn: file?.fanIn ?? 0, fanOut: file?.fanOut ?? 0 };
+    });
+    const rows = allRows.filter((r) => w.shown.has(r.path));
+    const scrolls = w.ordered.length > MAX_ROWS;
+    return {
+      id: folder.dir,
+      label,
+      folder,
+      open: true,
+      allRows,
+      rows,
+      scrolls,
+      offset: w.offset,
+      above: scrolls ? w.offset : 0,
+      below: scrolls ? w.ordered.length - w.offset - rows.length : 0,
+    };
+  });
 
   const byKey = new Map<string, ViewEdge>();
   for (const e of model.edges) {
-    const s = endpointOf(e.source, model, open, shownRows);
-    const t = endpointOf(e.target, model, open, shownRows);
+    const s = endpoint(e.source, model, windows);
+    const t = endpoint(e.target, model, windows);
     // Edges inside one folder aren't drawn; the folder is the unit here.
     if (s.node === t.node) continue;
     const id = `${s.node}#${s.handle}->${t.node}#${t.handle}`;
@@ -178,15 +236,38 @@ export function buildView(model: MapModel, open: ReadonlySet<string>): View {
 }
 
 export type Selection = { kind: "folder"; dir: string } | { kind: "file"; path: string } | null;
+export type Hover = Selection;
 
 export interface Focus {
-  // Handles (a folded node's dir, a row's path, or "<dir>#more") at full strength.
+  // Handle keys (a folded node's dir, a row's path, "<dir>#above|below") at
+  // full strength.
   active: Set<string>;
   direction: Map<string, "in" | "out">;
 }
 
-export function handleKey(node: string, handle: string): string {
-  return handle === MORE ? `${node}#${MORE}` : handle;
+// Whether a node shows at full strength under a focus: a folded node by its
+// own key, a panel if any of its rows (or its above/below rows) is active.
+export function nodeActive(focus: Focus, node: ViewNode): boolean {
+  if (!node.open) return focus.active.has(node.id);
+  return (
+    node.rows.some((r) => focus.active.has(r.path)) ||
+    focus.active.has(handleKey(node.id, ABOVE)) ||
+    focus.active.has(handleKey(node.id, BELOW))
+  );
+}
+
+export function viewWindows(model: MapModel, view: View): Map<string, Window> {
+  const windows = new Map<string, Window>();
+  for (const n of view.nodes) {
+    if (n.open) windows.set(n.id, { ordered: orderRows(n.folder.files, model.files), shown: new Set(n.rows.map((r) => r.path)), offset: n.offset });
+  }
+  return windows;
+}
+
+// The on-screen key a file currently attaches to.
+export function keyOf(model: MapModel, windows: ReadonlyMap<string, Window>, path: string): string {
+  const e = endpoint(path, model, windows);
+  return handleKey(e.node, e.handle);
 }
 
 export function focusOf(model: MapModel, view: View, selection: Selection): Focus | null {
@@ -196,12 +277,8 @@ export function focusOf(model: MapModel, view: View, selection: Selection): Focu
       ? [selection.path]
       : (model.folders.find((f) => f.dir === selection.dir)?.files ?? []),
   );
-  const open = new Set(view.nodes.filter((n) => n.open).map((n) => n.id));
-  const shownRows = new Map(view.nodes.map((n) => [n.id, new Set(n.rows.map((r) => r.path))]));
-  const key = (p: string): string => {
-    const e = endpointOf(p, model, open, shownRows);
-    return handleKey(e.node, e.handle);
-  };
+  const windows = viewWindows(model, view);
+  const key = (p: string): string => keyOf(model, windows, p);
 
   const active = new Set<string>();
   for (const p of selected) active.add(key(p));

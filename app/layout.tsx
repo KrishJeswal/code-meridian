@@ -1,7 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
-import { themeBootScript } from "@/components/theme";
 import "./globals.css";
 
 // Plex Mono keeps 0/O and 1/l/I distinct, which matters when the screen is
@@ -24,8 +23,7 @@ export const metadata: Metadata = {
 };
 
 // Clerk's components read the same tokens as the app, so the sign-in screen
-// and the org/user menus follow the theme control without a Clerk theme
-// package.
+// and the org/user menus match it without a Clerk theme package.
 const clerkAppearance = {
   variables: {
     colorPrimary: "var(--accent)",
@@ -45,17 +43,7 @@ const clerkAppearance = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    // suppressHydrationWarning: the boot script sets data-theme before React
-    // hydrates, so <html> legitimately differs from the server render.
-    <html
-      lang="en"
-      data-theme="system"
-      suppressHydrationWarning
-      className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
-    >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
-      </head>
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}>
       <body className="flex h-full flex-col text-[13px]">
         <ClerkProvider appearance={clerkAppearance}>{children}</ClerkProvider>
       </body>
